@@ -4,14 +4,14 @@
 #include "Config.h"
 
 // Enable debug log level depending on the chosen configuration
-#if ((defined(_MSC_VER) && defined(_DEBUG)) || (defined(OPENMITTSU_CONFIG_DEBUG_FLAG_SET)))
+//#if ((defined(_MSC_VER) && defined(_DEBUG)) || (defined(OPENMITTSU_CONFIG_DEBUG_FLAG_SET)))
 #	ifndef SPDLOG_DEBUG_ON
 #		define SPDLOG_DEBUG_ON
 #	endif
 #	define OPENMITTSU_LOGGING_LEVEL spdlog::level::debug
-#else
+/*#else
 #	define OPENMITTSU_LOGGING_LEVEL spdlog::level::warn
-#endif
+#endif*/
 
 #include <spdlog/spdlog.h>
 

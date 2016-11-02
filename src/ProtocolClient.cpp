@@ -1200,6 +1200,7 @@ void ProtocolClient::sendClientAcknowlegmentForMessage(MessageWithEncryptedPaylo
 }
 
 void ProtocolClient::encryptAndSendDataPacketToServer(QByteArray const& dataPacket) {
+        LOGGER_DEBUG("Sending data packet to server: :) .");
 	outgoingMessagesMutex.lock();
 	outgoingMessages.append(cryptoBox.encryptForServer(dataPacket));
 	outgoingMessagesTimer->start(0);
