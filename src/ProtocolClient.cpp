@@ -41,6 +41,15 @@
 
 #include "sodium.h"
 
+
+// My stuff:
+#include <sstream>
+#include <iomanip>
+
+std::string hexStr(BYTE *data, int len);
+std::string asciiStr(BYTE *data, int len);
+
+
 ProtocolClient::ProtocolClient(KeyRegistry const& keyRegistry, GroupRegistry const& groupRegistry, UniqueMessageIdGenerator* messageIdGenerator, ServerConfiguration const& serverConfiguration, ClientConfiguration const& clientConfiguration, MessageCenter* messageCenter, PushFromId const& pushFromId)
 	: QObject(nullptr), cryptoBox(keyRegistry), groupRegistry(groupRegistry), uniqueMessageIdGenerator(messageIdGenerator), messageCenter(messageCenter), pushFromIdPtr(std::unique_ptr<PushFromId>(new PushFromId(pushFromId))), isSetupDone(false), isNetworkSessionReady(false), isConnected(false), isAllowedToSend(false), socket(nullptr), networkSession(nullptr), serverConfiguration(serverConfiguration), clientConfiguration(clientConfiguration), outgoingMessagesTimer(nullptr), acknowledgmentWaitingTimer(nullptr), keepAliveTimer(nullptr), keepAliveCounter(0) {
 	// Intentionally left empty.
@@ -1200,12 +1209,12 @@ void ProtocolClient::sendClientAcknowlegmentForMessage(MessageWithEncryptedPaylo
 }
 
 void ProtocolClient::encryptAndSendDataPacketToServer(QByteArray const& dataPacket) {
-    QByteArray const& encryptedBytes[dataPacket.lenght()+100];
+    QByteArray const& encryptedBytes[dataPacket.length()+100];
     encryptedBytes = cryptoBox.encryptForServer(dataPacket);
-    LOGGER_DEBUG("Sending data packet to server:", hexStr(dataPacket, dataPacket.length()), hexStr(encryptedBytes, encryptedBytes.lenght));
+    LOGGER_DEBUG("Sending data packet to server:", hexStr(dataPacket, dataPacket.length()), hexStr(encryptedBytes, encryptedBytes.length));
     LOGGER_DEBUG("ASCII Message:", asciiStr(dataPacket, dataPacket.length()));
     LOGGER_DEBUG("Hex Message:", hexStr(dataPacket, dataPacket.length()));
-    LOGGER_DEBUG("Hex cipher text:", hexStr(encryptedBytes, encryptedBytes.lenght));
+    LOGGER_DEBUG("Hex cipher text:", hexStr(encryptedBytes, encryptedBytes.length));
 	outgoingMessagesMutex.lock();
     outgoingMessages.append(encryptedBytes);
 	outgoingMessagesTimer->start(0);
