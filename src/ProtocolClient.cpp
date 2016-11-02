@@ -1200,12 +1200,38 @@ void ProtocolClient::sendClientAcknowlegmentForMessage(MessageWithEncryptedPaylo
 }
 
 void ProtocolClient::encryptAndSendDataPacketToServer(QByteArray const& dataPacket) {
-        LOGGER_DEBUG("Sending data packet to server: :) .");
+    QByteArray const& encryptedBytes[dataPacket.lenght()+100];
+    encryptedBytes = cryptoBox.encryptForServer(dataPacket);
+    LOGGER_DEBUG("Sending data packet to server:", hexStr(dataPacket, dataPacket.length()), hexStr(encryptedBytes, encryptedBytes.lenght));
+    LOGGER_DEBUG("ASCII Message:", asciiStr(dataPacket, dataPacket.length()));
+    LOGGER_DEBUG("Hex Message:", hexStr(dataPacket, dataPacket.length()));
+    LOGGER_DEBUG("Hex cipher text:", hexStr(encryptedBytes, encryptedBytes.lenght));
 	outgoingMessagesMutex.lock();
-	outgoingMessages.append(cryptoBox.encryptForServer(dataPacket));
+    outgoingMessages.append(encryptedBytes);
 	outgoingMessagesTimer->start(0);
 	outgoingMessagesMutex.unlock();
 }
+
+/** Von mir:
+ *
+ */
+
+std::string hexStr(BYTE *data, int len)
+{
+    std::stringstream ss;
+    ss<<std::hex;
+    for(int i(0);i<len;++i)
+        ss<<(int)data[i];
+    return ss.str();
+}
+std::string asciiStr(BYTE *data, int len)
+{
+    std::stringstream ss;
+    for(int i(0);i<len;++i)
+        ss<<(char)data[i];
+    return ss.str();
+}
+
 
 void ProtocolClient::enqeueWaitForAcknowledgment(MessageId const& messageId, std::shared_ptr<AcknowledgmentProcessor> const& acknowledgmentProcessor) {
 	acknowledgmentWaitingMutex.lock();
