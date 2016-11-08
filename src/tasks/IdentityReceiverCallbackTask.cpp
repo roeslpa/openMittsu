@@ -1,3 +1,5 @@
+//Debugged
+
 #include "tasks/IdentityReceiverCallbackTask.h"
 
 #include "exceptions/CryptoException.h"
@@ -40,6 +42,7 @@ void IdentityReceiverCallbackTask::taskRun() {
 	request.setSslConfiguration(getSslConfigurationWithCaCerts());
 	request.setUrl(QUrl(urlString.arg(identityToFetch.toQString())));
 	request.setRawHeader("User-Agent", agentString.toUtf8());
+    LOGGER_DEBUG("((>MessagePart:\nnewContactRequestURL\nHex plain: {}\nHex cipher: -))", request.url.toString().toStdString());
 
 	QNetworkReply *reply = networkAccessManager.get(request);
 	eventLoop.exec(); // blocks until "finished()" has been called
@@ -56,6 +59,8 @@ void IdentityReceiverCallbackTask::taskRun() {
 			QJsonValue jsonValuePublicKey = jsonObject.value("publicKey");
 			QString const publicKeyHexString = QByteArray::fromBase64(jsonValuePublicKey.toString().toLatin1()).toHex();
 			LOGGER_DEBUG("Received reply for identity = \"{}\" with public key = \"{}\".", jsonValueIdentity.toString().toStdString(), publicKeyHexString.toStdString());
+
+            LOGGER_DEBUG("((<Message:\nnewContactInfo\nHex plain: {}\nHex cipher: -))",  QString(answer.toHex()).toStdString());
 
 			fetchedPublicKey = PublicKey::fromHexString(publicKeyHexString);
 			finishedWithNoError();
