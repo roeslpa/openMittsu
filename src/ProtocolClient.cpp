@@ -42,14 +42,6 @@
 #include "sodium.h"
 
 
-// My stuff:
-#include <sstream>
-#include <iomanip>
-
-std::string hexStr(BYTE *data, int len);
-std::string asciiStr(BYTE *data, int len);
-
-
 ProtocolClient::ProtocolClient(KeyRegistry const& keyRegistry, GroupRegistry const& groupRegistry, UniqueMessageIdGenerator* messageIdGenerator, ServerConfiguration const& serverConfiguration, ClientConfiguration const& clientConfiguration, MessageCenter* messageCenter, PushFromId const& pushFromId)
 	: QObject(nullptr), cryptoBox(keyRegistry), groupRegistry(groupRegistry), uniqueMessageIdGenerator(messageIdGenerator), messageCenter(messageCenter), pushFromIdPtr(std::unique_ptr<PushFromId>(new PushFromId(pushFromId))), isSetupDone(false), isNetworkSessionReady(false), isConnected(false), isAllowedToSend(false), socket(nullptr), networkSession(nullptr), serverConfiguration(serverConfiguration), clientConfiguration(clientConfiguration), outgoingMessagesTimer(nullptr), acknowledgmentWaitingTimer(nullptr), keepAliveTimer(nullptr), keepAliveCounter(0) {
 	// Intentionally left empty.
@@ -309,6 +301,9 @@ void ProtocolClient::messageSendDone(ContactId const& contactId, MessageId const
 	QMetaObject::invokeMethod(messageCenter, "onMessageSendDone", Qt::QueuedConnection, Q_ARG(ContactId, contactId), Q_ARG(MessageId, messageId));
 }
 
+/**
+ * Reads all bytes from the server and processes them by following functions depending on the type
+ */
 void ProtocolClient::socketOnReadyRead() {
 	if (!isConnected) {
 		// ignore until the handshake is complete.
@@ -341,6 +336,8 @@ void ProtocolClient::socketOnReadyRead() {
 
 	// Update stats
 	messagesReceived += 1;
+
+    LOGGER_DEBUG("((<Message:\nincoming {}\nHex plain: {}\nHex cipher: {}))", messagesReceived, QString(decodedPacket.toHex()).toStdString(), QString(packet.toHex()).toStdString());
 
 	// Handle packet
 	// Extract LSB:
@@ -411,6 +408,7 @@ void ProtocolClient::handleIncomingMessage(MessageWithEncryptedPayload const& me
 		}
 		
 		MessageWithPayload messageWithPayload(message.decrypt(&cryptoBox));
+        LOGGER_DEBUG("((<MessagePart:\nincomingPayload\nHex plain: {}\nHex cipher: {}))", QString(messageWithPayload.getPayload().toHex()).toStdString(), QString(message.getEncryptedPayload().toPacket().toHex()).toStdString());
 		handleIncomingMessage(messageWithPayload, &message);
 	}
 }
@@ -822,7 +820,7 @@ void ProtocolClient::handleOutgoingMessage(ContactMessage const*const contactMes
 	MessageWithEncryptedPayload messageWithEncryptedPayload(messageWithPayload.encrypt(&cryptoBox));
 
 	encryptAndSendDataPacketToServer(messageWithEncryptedPayload.toPacket());
-
+    LOGGER_DEBUG("((>MessagePart:\noutgoingPayload\nHex plain: {}\nHex cipher: {}))", QString(messageWithPayload.getPayload().toHex()).toStdString(), QString(messageWithEncryptedPayload.toPacket().toHex()).toStdString());
 	if (!contactMessage->getMessageHeader().getFlags().isNoAckExpectedForMessage()) {
 		enqeueWaitForAcknowledgment(contactMessage->getMessageHeader().getMessageId(), acknowledgmentProcessor);
 	}
@@ -856,6 +854,7 @@ void ProtocolClient::handleOutgoingMessage(SpecializedGroupMessage const*const m
 	MessageWithEncryptedPayload messageWithEncryptedPayload(messageWithPayload.encrypt(&cryptoBox));
 
 	encryptAndSendDataPacketToServer(messageWithEncryptedPayload.toPacket());
+    LOGGER_DEBUG("((>MessagePart:\noutgoingGroupPayload\nHex plain: {}\nHex cipher: {}))", QString(messageWithPayload.getPayload().toHex()).toStdString(), QString(messageWithEncryptedPayload.toPacket().toHex()).toStdString());
 
 	if (!message->getMessageHeader().getFlags().isNoAckExpectedForMessage()) {
 		enqeueWaitForAcknowledgment(message->getMessageHeader().getMessageId(), acknowledgmentProcessor);
@@ -1203,42 +1202,31 @@ void ProtocolClient::sendGroupTitle(quint64 groupId, QString const& groupTitle) 
 
 */
 
+
+/**
+ * This is the method for acknownledging
+ *
+ */
 void ProtocolClient::sendClientAcknowlegmentForMessage(MessageWithEncryptedPayload const& message) {
-	LOGGER_DEBUG("Sending client acknowledgment to server for message #{}.", message.getMessageHeader().getMessageId().toString());
+        LOGGER_DEBUG("Sending client acknowledgment to server for message #{} to sender {}.", message.getMessageHeader().getMessageId().toString(), message.getMessageHeader().getSender().toString());
 	encryptAndSendDataPacketToServer(ClientAcknowledgement(message.getMessageHeader().getSender(), message.getMessageHeader().getMessageId()).toPacket());
 }
 
+/**
+ * This is the final sending method
+ */
+
 void ProtocolClient::encryptAndSendDataPacketToServer(QByteArray const& dataPacket) {
-    QByteArray const& encryptedBytes[dataPacket.length()+100];
+    QByteArray encryptedBytes;
+    QString asciiData = QString(dataPacket.data());
     encryptedBytes = cryptoBox.encryptForServer(dataPacket);
-    LOGGER_DEBUG("Sending data packet to server:", hexStr(dataPacket, dataPacket.length()), hexStr(encryptedBytes, encryptedBytes.length));
-    LOGGER_DEBUG("ASCII Message:", asciiStr(dataPacket, dataPacket.length()));
-    LOGGER_DEBUG("Hex Message:", hexStr(dataPacket, dataPacket.length()));
-    LOGGER_DEBUG("Hex cipher text:", hexStr(encryptedBytes, encryptedBytes.length));
-	outgoingMessagesMutex.lock();
+
+    LOGGER_DEBUG("((>Message:\noutgoing\nHex plain: {}\nHex cipher: {}))", QString(dataPacket.toHex()).toStdString(), QString(encryptedBytes.toHex()).toStdString());
+
+    outgoingMessagesMutex.lock();
     outgoingMessages.append(encryptedBytes);
 	outgoingMessagesTimer->start(0);
 	outgoingMessagesMutex.unlock();
-}
-
-/** Von mir:
- *
- */
-
-std::string hexStr(BYTE *data, int len)
-{
-    std::stringstream ss;
-    ss<<std::hex;
-    for(int i(0);i<len;++i)
-        ss<<(int)data[i];
-    return ss.str();
-}
-std::string asciiStr(BYTE *data, int len)
-{
-    std::stringstream ss;
-    for(int i(0);i<len;++i)
-        ss<<(char)data[i];
-    return ss.str();
 }
 
 
@@ -1300,7 +1288,12 @@ bool ProtocolClient::waitForData(qint64 minBytesRequired) {
 		return true;
 	}
 }
-
+/**
+ * This is the method for the establishment of the connection
+ * It also authenticates the user towards the server and exchanges
+ * ephemeral keys..
+ * => Surely interesting for AKE analysis.. :)
+ */
 void ProtocolClient::socketConnected() {
 	LOGGER_DEBUG("Socket is now connected.");
 	if (isConnected) {
@@ -1313,6 +1306,7 @@ void ProtocolClient::socketConnected() {
 		emit connectToFinished(-5, "Could not write the short term public key to server.");
 		return;
 	}
+    LOGGER_DEBUG("((>Message:\nephClientKeyToServer\nHex plain: {}\nHex cipher: -))", QString(cryptoBox.getClientShortTermKeyPair().getPublicKey()).toStdString());
 	
 	QByteArray const clientNoncePrefix(cryptoBox.getClientNonceGenerator().getNoncePrefix());
 	if (socket->write(clientNoncePrefix) != clientNoncePrefix.size()) {
@@ -1321,6 +1315,7 @@ void ProtocolClient::socketConnected() {
 		return;
 	}
 	LOGGER_DEBUG("Client Nonce Prefix: ", QString(clientNoncePrefix.toHex()).toStdString());
+    LOGGER_DEBUG("((>Message:\nephClientNonceToServer\nHex plain: {}\nHex cipher: -))", QString(clientNoncePrefix.toHex()).toStdString());
 
 	socket->flush();
 	LOGGER_DEBUG("Wrote Client Hello.");
@@ -1340,14 +1335,19 @@ void ProtocolClient::socketConnected() {
 		return;
 	}
 	LOGGER_DEBUG("Data (server HELLO): {}", QString(serverHello.toHex()).toStdString());
+    LOGGER_DEBUG("((<Message:\nfullServerHelloResponce\nHex plain: {}\nHex cipher: -))", QString(serverHello.toHex()).toStdString());
 
 	cryptoBox.setServerNoncePrefixFromServerHello(serverHello.left(NonceGenerator::getNoncePrefixLength()));
+    LOGGER_DEBUG("((<MessagePart:\nserverNonce\nHex plain: {}\nHex cipher: -))", QString(serverHello.left(NonceGenerator::getNoncePrefixLength()).toHex()).toStdString());
 
 	QByteArray const decodedBox = cryptoBox.decryptFromServer(serverHello.mid(NonceGenerator::getNoncePrefixLength()), serverConfiguration.getServerLongTermPublicKey());
+    LOGGER_DEBUG("((<MessagePart:\nserverEncInfo\nHex plain: {}\nHex cipher: {}))", QString(decodedBox.toHex()).toStdString(), QString(serverHello.mid(NonceGenerator::getNoncePrefixLength()).toHex()).toStdString());
 
 	// First short term public key of the server, than our client nonce prefix for validation.
 	cryptoBox.setServerShortTermPublicKey(PublicKey::fromDecodedServerResponse(decodedBox.left(Key::getPublicKeyLength())));
 	QByteArray const clientNoncePrefixCopy = decodedBox.mid(Key::getPublicKeyLength(), NonceGenerator::getNoncePrefixLength());
+    LOGGER_DEBUG("((<MessagePartPart:\nserverEphPubKey\nHex plain: {}\nHex cipher: -))", QString(decodedBox.left(Key::getPublicKeyLength()).toHex()).toStdString());
+    LOGGER_DEBUG("((<MessagePartPart:\nclientNonceCopy\nHex plain: {}\nHex cipher: -))", QString(decodedBox.mid(Key::getPublicKeyLength(), NonceGenerator::getNoncePrefixLength()).toHex()).toStdString());
 
 	if (cryptoBox.getClientNonceGenerator().getNoncePrefix() != clientNoncePrefixCopy) {
 		LOGGER()->critical("The Server returned a different client nonce prefix: {} vs. {}", QString(cryptoBox.getClientNonceGenerator().getNoncePrefix().toHex()).toStdString(), QString(clientNoncePrefixCopy.toHex()).toStdString());
@@ -1369,6 +1369,8 @@ void ProtocolClient::socketConnected() {
 	}
 	socket->flush();
 
+    LOGGER_DEBUG("((>Message:\nauthPacket\nHex plain: see above\nHex cipher: {}))", QString(authenticationPackageEncrypted.toHex()).toStdString());
+
 	if (!waitForData(PROTO_AUTHENTICATION_REPLY_LENGTH_BYTES)) {
 		LOGGER()->critical("Got no reply from server for AuthAck, we have {} of {} bytes available.", socket->bytesAvailable(), PROTO_AUTHENTICATION_REPLY_LENGTH_BYTES);
 		emit connectToFinished(-17, "Server did not reply after sending client authentication (invalid identity?).");
@@ -1386,7 +1388,7 @@ void ProtocolClient::socketConnected() {
 	LOGGER_DEBUG("Data (server authAck): {}", QString(authenticationAcknowledgment.toHex()).toStdString());
 
 	QByteArray authenticationAcknowledgmentDecrypted = cryptoBox.decryptFromServer(authenticationAcknowledgment);
-
+    LOGGER_DEBUG("((<Message:\nauthPacketReply\nHex plain: {}\nHex cipher: {}))", QString(authenticationAcknowledgmentDecrypted.toHex()).toStdString(), QString(authenticationAcknowledgment.toHex()).toStdString());
 	LOGGER_DEBUG("Handshake finished!");
 	emit connectToFinished(0, "Success");
 	connectionStart = QDateTime::currentDateTime();

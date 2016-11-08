@@ -1,3 +1,4 @@
+//Debugged
 #include "protocol/AuthenticationPacket.h"
 
 #include "exceptions/InternalErrorException.h"
@@ -50,6 +51,10 @@ QByteArray AuthenticationPacket::toPacket() const {
 	if (result.size() != (PROTO_AUTHENTICATION_UNENCRYPTED_LENGTH_BYTES)) {
 		throw InternalErrorException() << "Size constraint failed: Authentication Package Size invalid for Field #5";
 	}
+
+    LOGGER_DEBUG("((>MessagePart:\nauthPacket: Client ID, Version String, proof nonce, server nonce, enc_(C.lt.sk, S.lt.pk),nonce(C.st.pk)\nHex plain: {}\nHex cipher: -))", QString(result.toHex()).toStdString());
+
+    LOGGER_DEBUG("((>MessagePartPart:\nproofBox\nHex plain: {}\nHex cipher: {}))", QString((cryptoBox->getClientShortTermKeyPair().getPublicKey()).toHex()).toStdString(), QString(proofBox.toHex()).toStdString());
 
 	return result;
 }
