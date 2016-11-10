@@ -1306,7 +1306,7 @@ void ProtocolClient::socketConnected() {
 		emit connectToFinished(-5, "Could not write the short term public key to server.");
 		return;
 	}
-    LOGGER_DEBUG("((>Message:\nephClientKeyToServer\nHex plain: {}\nHex cipher: -))", QString(cryptoBox.getClientShortTermKeyPair().getPublicKey()).toStdString());
+    LOGGER_DEBUG("((>Message:\nephClientKeyToServer\nHex plain: {}\nHex cipher: -))", QString(cryptoBox.getClientShortTermKeyPair().getPublicKey().toHex()).toStdString());
 	
 	QByteArray const clientNoncePrefix(cryptoBox.getClientNonceGenerator().getNoncePrefix());
 	if (socket->write(clientNoncePrefix) != clientNoncePrefix.size()) {
