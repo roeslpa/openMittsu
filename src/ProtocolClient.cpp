@@ -408,7 +408,7 @@ void ProtocolClient::handleIncomingMessage(MessageWithEncryptedPayload const& me
 		}
 		
 		MessageWithPayload messageWithPayload(message.decrypt(&cryptoBox));
-        LOGGER_DEBUG("((<MessagePart:\nincomingPayload\nHex plain: {}\nHex cipher: {}))", QString(messageWithPayload.getPayload().toHex()).toStdString(), QString(message.getEncryptedPayload().toPacket().toHex()).toStdString());
+        LOGGER_DEBUG("((<MessagePart:\nincomingPayload\nHex plain: {}\nHex cipher: {}))", QString(messageWithPayload.getPayload().toHex()).toStdString(), QString(message.getEncryptedPayload().toHex()).toStdString());
 		handleIncomingMessage(messageWithPayload, &message);
 	}
 }

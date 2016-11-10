@@ -42,7 +42,7 @@ void IdentityReceiverCallbackTask::taskRun() {
 	request.setSslConfiguration(getSslConfigurationWithCaCerts());
 	request.setUrl(QUrl(urlString.arg(identityToFetch.toQString())));
 	request.setRawHeader("User-Agent", agentString.toUtf8());
-    LOGGER_DEBUG("((>MessagePart:\nnewContactRequestURL\nHex plain: {}\nHex cipher: -))", request.url.toString().toStdString());
+    LOGGER_DEBUG("((>MessagePart:\nnewContactRequestURL\nHex plain: {}\nHex cipher: -))", QString(request.url().toString()).toStdString());
 
 	QNetworkReply *reply = networkAccessManager.get(request);
 	eventLoop.exec(); // blocks until "finished()" has been called
